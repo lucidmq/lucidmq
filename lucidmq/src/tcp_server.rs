@@ -5,7 +5,7 @@ use std::io;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 
-use crate::cap_n_proto_helper::parse_request;
+use crate::msgpack_helper::parse_request;
 use crate::types::Command;
 
 use tokio::net::{
@@ -119,8 +119,8 @@ async fn handle_request(conn_id: String, recv: OwnedReadHalf, sender: SenderType
                 break;
             }
         };
-        let command =
-            parse_request(conn_id.clone(), message_buff.clone()).expect("Unable to parse message");
+        
+        let command = parse_request(conn_id.clone(), message_buff.clone());
         sender.send(command).await.expect("Unble to send message");
     }
 }

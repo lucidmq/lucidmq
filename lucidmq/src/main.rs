@@ -1,7 +1,7 @@
 mod broker;
-mod cap_n_proto_helper;
 mod consumer;
-pub mod lucid_schema_capnp;
+pub mod messages;
+mod msgpack_helper;
 mod producer;
 mod lucidmq_errors;
 mod tcp_server;

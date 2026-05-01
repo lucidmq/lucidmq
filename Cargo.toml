@@ -3,6 +3,5 @@
 members = [
     "nolan",
     "lucidmq",
-    "lucidmq-cli",
-    "protocol"
 ]
+resolver = "2"

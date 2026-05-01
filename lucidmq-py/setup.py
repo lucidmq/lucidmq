@@ -11,7 +11,7 @@ setup(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License"
     ],
-    install_requires=['pycapnp'],
+    install_requires=['msgpack'],
     python_requires='>=3.8',
     include_package_data=True
 )

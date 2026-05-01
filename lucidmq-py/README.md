@@ -10,7 +10,7 @@ Also, this package contains a suite of integration tests that are used to test s
 ```
 $ python3 -m venv env
 $ source env/bin/activate
-$ pip3 -r install requirements.txt
+$ pip3 install -r requirements.txt
 ```
 
 ## How to Run integration tests
