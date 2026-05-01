@@ -1,304 +1,272 @@
-# This is the integration test suite for LucidMQ
-from lucidmq_client import Producer, Consumer, TopicManager, LucidmqClient
-import cap_helper
+import os
 import string
 import random
-import os
+import pytest
 
-HOST = os.environ.get('LUCIDMQ_SERVER_HOST', '127.0.0.1')  # The server's hostname or IP address
-PORT = int(os.environ.get('LUCIDMQ_SERVER_PORT', '6969'))  # The port used by the server
+from lucidmq_client import Producer, Consumer, TopicManager, LucidmqClient
+import msgpack_helper
+
+HOST = os.environ.get('LUCIDMQ_SERVER_HOST', '127.0.0.1')
+PORT = int(os.environ.get('LUCIDMQ_SERVER_PORT', '6969'))
 
 def get_random_string(length):
-    # choose from all lowercase letter
     letters = string.ascii_lowercase
-    result_str = ''.join(random.choice(letters) for i in range(length))
-    return result_str
+    return ''.join(random.choice(letters) for i in range(length))
 
 class TestsOthers:
     def test_send_invalid_bytes(self):
-        lucidClient = LucidmqClient(HOST, PORT)
-        invalid_data = b'invalidData'
-        lucidClient.send_message_bytes(invalid_data)
-        data = lucidClient.recieve_response()
-        invalid_response_result = cap_helper.response_parser(data).to_dict()
-        assert invalid_response_result['errorMessage'] == 'invalid message sent'
+        with LucidmqClient(HOST, PORT) as lucidClient:
+            invalid_data = b'invalidData'
+            framed = msgpack_helper.create_message_frame(invalid_data)
+            lucidClient.send_message_bytes(framed)
+            data = lucidClient.recieve_response()
+            invalid_response_result = msgpack_helper.response_parser(data)
+            assert 'Failed to parse message' in invalid_response_result['error_message']
 
 class TestTopics:
     def test_topic_create(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        # Create a topic
-        topic_create_result = topic_manager.create_topic(topic_name)
-        assert topic_create_result['success'] == True
-        assert topic_create_result['topicName'] == topic_name
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+        with TopicManager(HOST, PORT) as topic_manager:
+            topic_create_result = topic_manager.create_topic(topic_name)
+            assert topic_create_result['success'] == True
+            assert topic_create_result['topic_name'] == topic_name
+            topic_manager.delete_topic(topic_name)
 
     def test_create_topic_already_exists(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        topic_create_result = topic_manager.create_topic(topic_name)
-        topic_create_result = topic_manager.create_topic(topic_name)
-        assert topic_create_result['success'] == False
-        assert topic_create_result['topicName'] == topic_name
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+        with TopicManager(HOST, PORT) as topic_manager:
+            topic_manager.create_topic(topic_name)
+            topic_create_result = topic_manager.create_topic(topic_name)
+            assert topic_create_result['success'] == False
+            assert topic_create_result['topic_name'] == topic_name
+            topic_manager.delete_topic(topic_name)
 
     def test_topic_describe(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        # Create a topic
-        topic_create_result = topic_manager.create_topic(topic_name)
-        topic_describe_result = topic_manager.describe_topic(topic_name)
-        assert topic_describe_result['success'] == True
-        assert topic_describe_result['topicName'] == topic_name
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
-
+        with TopicManager(HOST, PORT) as topic_manager:
+            topic_manager.create_topic(topic_name)
+            topic_describe_result = topic_manager.describe_topic(topic_name)
+            assert topic_describe_result['success'] == True
+            assert topic_describe_result['topic_name'] == topic_name
+            topic_manager.delete_topic(topic_name)
 
     def test_describe_topic_dne(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        topic_describe_result = topic_manager.describe_topic(topic_name)
-        assert topic_describe_result['success'] == False
-        assert topic_describe_result['topicName'] == topic_name
+        with TopicManager(HOST, PORT) as topic_manager:
+            topic_describe_result = topic_manager.describe_topic(topic_name)
+            assert topic_describe_result['success'] == False
+            assert topic_describe_result['topic_name'] == topic_name
 
     def test_delete_topic(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        topic_manager.create_topic(topic_name)
-        topic_delete_result = topic_manager.delete_topic(topic_name)
-        assert topic_delete_result['success'] == True
-        assert topic_delete_result['topicName'] == topic_name
+        with TopicManager(HOST, PORT) as topic_manager:
+            topic_manager.create_topic(topic_name)
+            topic_delete_result = topic_manager.delete_topic(topic_name)
+            assert topic_delete_result['success'] == True
+            assert topic_delete_result['topic_name'] == topic_name
     
-
     def test_delete_topic_dne(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        topic_delete_result = topic_manager.delete_topic(topic_name)
-        assert topic_delete_result['success'] == False
-        assert topic_delete_result['topicName'] == topic_name
+        with TopicManager(HOST, PORT) as topic_manager:
+            topic_delete_result = topic_manager.delete_topic(topic_name)
+            assert topic_delete_result['success'] == False
+            assert topic_delete_result['topic_name'] == topic_name
 
 class TestProducer:
     def test_produce_1_message(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        producer = Producer(HOST, PORT)
-        # Create a topic to set up
-        topic_create_result = topic_manager.create_topic(topic_name)
+        with TopicManager(HOST, PORT) as topic_manager, Producer(HOST, PORT) as producer:
+            topic_manager.create_topic(topic_name)
 
-        produce_request_result = producer.produce(topic_name, b'key', b'value')
-        assert produce_request_result['success'] == True
-        assert produce_request_result['topicName'] == topic_name
-        assert produce_request_result['offset'] == 0
-        
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+            produce_request_result = producer.produce(topic_name, b'key', b'value')
+            assert produce_request_result['success'] == True
+            assert produce_request_result['topic_name'] == topic_name
+            assert produce_request_result['offset'] == 0
+            
+            topic_manager.delete_topic(topic_name)
 
     def test_produce_10_message(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        producer = Producer(HOST, PORT)
-        
-        # Create a topic to set up
-        topic_create_result = topic_manager.create_topic(topic_name)
+        with TopicManager(HOST, PORT) as topic_manager, Producer(HOST, PORT) as producer:
+            topic_manager.create_topic(topic_name)
 
-        for x in range(10):
-            key = bytes("key{0}".format(x), 'utf-8')
-            value = bytes("value{0}".format(x), 'utf-8')
-            produce_request_result = producer.produce(topic_name, key, value)
-            assert produce_request_result['success'] == True
-            assert produce_request_result['topicName'] == topic_name
-            assert produce_request_result['offset'] == x
-        
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+            for x in range(10):
+                key = bytes(f"key{x}", 'utf-8')
+                value = bytes(f"value{x}", 'utf-8')
+                produce_request_result = producer.produce(topic_name, key, value)
+                assert produce_request_result['success'] == True
+                assert produce_request_result['topic_name'] == topic_name
+                assert produce_request_result['offset'] == x
+                
+            topic_manager.delete_topic(topic_name)
     
-    # Run this test so we attempt a split
     def test_produce_30_large_message(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        producer = Producer(HOST, PORT)
-        
-        # Create a topic to set up
-        topic_create_result = topic_manager.create_topic(topic_name)
+        with TopicManager(HOST, PORT) as topic_manager, Producer(HOST, PORT) as producer:
+            topic_manager.create_topic(topic_name)
 
-        for x in range(30):
-            key = bytes("key{0}".format(x), 'utf-8')
-            value = bytes("myextreamlyverylargevalue{0}".format(x), 'utf-8')
-            produce_request_result = producer.produce(topic_name, key, value)
-            assert produce_request_result['success'] == True
-            assert produce_request_result['topicName'] == topic_name
-            assert produce_request_result['offset'] == x
-        
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+            for x in range(30):
+                key = bytes(f"key{x}", 'utf-8')
+                value = bytes(f"myextreamlyverylargevalue{x}", 'utf-8')
+                produce_request_result = producer.produce(topic_name, key, value)
+                assert produce_request_result['success'] == True
+                assert produce_request_result['topic_name'] == topic_name
+                assert produce_request_result['offset'] == x
+                
+            topic_manager.delete_topic(topic_name)
 
     def test_produce_topic_dne(self):
         topic_name = get_random_string(10)
-        producer = Producer(HOST, PORT)
-        
-        produce_request_result = producer.produce(topic_name, b'key', b'value')
-        assert produce_request_result['success'] == False
-        assert produce_request_result['topicName'] == topic_name
-        assert produce_request_result['offset'] == 0
+        with Producer(HOST, PORT) as producer:
+            produce_request_result = producer.produce(topic_name, b'key', b'value')
+            assert produce_request_result['success'] == False
+            assert produce_request_result['topic_name'] == topic_name
+            assert produce_request_result['offset'] == 0
 
 class TestConsumer:
     def test_consumer_1_message(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        producer = Producer(HOST, PORT)
-        consumer = Consumer(HOST, PORT, 100)
-        # Create a topic to set up
-        topic_create_result = topic_manager.create_topic(topic_name)
+        with TopicManager(HOST, PORT) as tm, Producer(HOST, PORT) as prod, Consumer(HOST, PORT, 100) as cons:
+            tm.create_topic(topic_name)
 
-        key = b'key'
-        value = b'value'
-        # Produce message to our topic
-        produce_request_result = producer.produce(topic_name, key, value)
+            key = b'key'
+            value = b'value'
+            prod.produce(topic_name, key, value)
 
-        consumer_request_result = consumer.consume(topic_name, "cg1")
+            consumer_request_result = cons.consume(topic_name, "cg1")
 
-        # Check the wraper around consumer request
-        assert consumer_request_result['success'] == True
-        assert consumer_request_result['topicName'] == topic_name
-        assert len(consumer_request_result['messages']) == 1
+            assert consumer_request_result['success'] == True
+            assert consumer_request_result['topic_name'] == topic_name
+            assert len(consumer_request_result['messages']) == 1
 
-        # Check the message itself
-        message = consumer_request_result['messages'][0]
-        assert message['key'] == key
-        assert message['value'] == value
-    
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+            message = consumer_request_result['messages'][0]
+            assert bytes(message['key']) == key
+            assert bytes(message['value']) == value
+            
+            tm.delete_topic(topic_name)
 
     def test_consumer_10_message(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        producer = Producer(HOST, PORT)
-        consumer = Consumer(HOST, PORT, 100)
-        # Create a topic to set up
-        topic_create_result = topic_manager.create_topic(topic_name)
-        
-        keys_sent = []
-        values_sent = []
-        
-        for x in range(10):
-            key = bytes('key{}'.format(x), 'utf-8')
-            value = bytes('value{}'.format(x), 'utf-8')
-            keys_sent.append(key)
-            values_sent.append(value)
-            # Produce message to our topic
-            produce_request_result = producer.produce(topic_name, key, value)
+        with TopicManager(HOST, PORT) as tm, Producer(HOST, PORT) as prod, Consumer(HOST, PORT, 100) as cons:
+            tm.create_topic(topic_name)
+            
+            keys_sent = []
+            values_sent = []
+            
+            for x in range(10):
+                key = bytes(f'key{x}', 'utf-8')
+                value = bytes(f'value{x}', 'utf-8')
+                keys_sent.append(key)
+                values_sent.append(value)
+                prod.produce(topic_name, key, value)
 
-        consumer_request_result = consumer.consume(topic_name, "cg1")
+            consumer_request_result = cons.consume(topic_name, "cg1")
 
-        # Check the wraper around consumer request
-        assert consumer_request_result['success'] == True
-        assert consumer_request_result['topicName'] == topic_name
+            assert consumer_request_result['success'] == True
+            assert consumer_request_result['topic_name'] == topic_name
+            assert len(consumer_request_result['messages']) == 10
+            
+            for i in range(len(consumer_request_result['messages'])):
+                message = consumer_request_result['messages'][i]
+                assert keys_sent[i] == bytes(message['key'])
+                assert values_sent[i] == bytes(message['value'])
         
-        assert len(consumer_request_result['messages']) == 10
-        for i in range(len(consumer_request_result['messages'])):
-            message = consumer_request_result['messages'][i]
-            assert keys_sent[i] ==  message['key']
-            assert values_sent[i] ==  message['value']
-    
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+            tm.delete_topic(topic_name)
 
     def test_consumer_no_message(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        consumer = Consumer(HOST, PORT, 100)
-        # Create a topic to set up
-        topic_create_result = topic_manager.create_topic(topic_name)
+        with TopicManager(HOST, PORT) as tm, Consumer(HOST, PORT, 100) as cons:
+            tm.create_topic(topic_name)
 
-        consumer_request_result = consumer.consume(topic_name, "cg1")
+            consumer_request_result = cons.consume(topic_name, "cg1")
 
-        # Check the wraper around consumer request
-        assert consumer_request_result['success'] == False
-        assert consumer_request_result['topicName'] == topic_name
-        assert len(consumer_request_result['messages']) == 0
-    
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+            assert consumer_request_result['success'] == True
+            assert consumer_request_result['topic_name'] == topic_name
+            assert len(consumer_request_result['messages']) == 0
+            
+            tm.delete_topic(topic_name)
     
     def test_consume_topic_dne(self):
         topic_name = get_random_string(10)
-        consumer = Consumer(HOST, PORT, 100)
-        
-        consumer_request_result = consumer.consume(topic_name, "cg1")
-        assert consumer_request_result['success'] == False
-        assert consumer_request_result['topicName'] == topic_name
+        with Consumer(HOST, PORT, 100) as cons:
+            consumer_request_result = cons.consume(topic_name, "cg1")
+            assert consumer_request_result['success'] == False
+            assert consumer_request_result['topic_name'] == topic_name
     
     def test_consumer_message_already_consumed(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        producer = Producer(HOST, PORT)
-        consumer0 = Consumer(HOST, PORT, 100)
-        consumer1 = Consumer(HOST, PORT, 100)
-        consumer_group = "cg1"
-        # Create a topic to set up
-        topic_create_result = topic_manager.create_topic(topic_name)
+        with TopicManager(HOST, PORT) as tm, Producer(HOST, PORT) as prod, Consumer(HOST, PORT, 100) as cons0, Consumer(HOST, PORT, 100) as cons1:
+            consumer_group = "cg1"
+            tm.create_topic(topic_name)
 
-        key = b'key'
-        value = b'value'
-        # Produce message to our topic
-        produce_request_result = producer.produce(topic_name, key, value)
+            key = b'key'
+            value = b'value'
+            prod.produce(topic_name, key, value)
 
-        consumer_request_result = consumer0.consume(topic_name, consumer_group)
+            consumer_request_result = cons0.consume(topic_name, consumer_group)
 
-        # Check the wraper around consumer request
-        assert consumer_request_result['success'] == True
-        assert consumer_request_result['topicName'] == topic_name
-        assert len(consumer_request_result['messages']) == 1
+            assert consumer_request_result['success'] == True
+            assert len(consumer_request_result['messages']) == 1
 
-        # Check the message itself
-        message = consumer_request_result['messages'][0]
-        assert message['key'] == key
-        assert message['value'] == value
+            message = consumer_request_result['messages'][0]
+            assert bytes(message['key']) == key
+            assert bytes(message['value']) == value
 
-        consumer_request_result = consumer1.consume(topic_name, consumer_group)
+            # Second consumer polling the same group gets nothing
+            consumer_request_result = cons1.consume(topic_name, consumer_group)
 
-        # Check the wraper around consumer request
-        assert consumer_request_result['success'] == False
-        assert consumer_request_result['topicName'] == topic_name
-        assert len(consumer_request_result['messages']) == 0
+            assert consumer_request_result['success'] == True
+            assert len(consumer_request_result['messages']) == 0
 
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+            tm.delete_topic(topic_name)
 
     def test_consumer_large_message(self):
         topic_name = get_random_string(10)
-        topic_manager = TopicManager(HOST, PORT)
-        producer = Producer(HOST, PORT)
-        consumer = Consumer(HOST, PORT, 100)
-        # Create a topic to set up
-        topic_create_result = topic_manager.create_topic(topic_name)
-        
-        keys_sent = []
-        
-        # Real life request
-        value = b'{"data": ["Iggy Azalea", "DaBaby", "21 Savage", "Smokepurpp", "Tee Grizzly", "Quando Rondo", "Drake", "NLE Choppa", "Young Dolph", "Lil Nas X", "Nav", "iann dior", "NoCap", "Gunna", "Russ", "Nipsey Hussle", "Don Toliver", "2 Chainz", "Lil Durk", "J Balvin", "YNW Melly", "Tyga", "Juice WRLD", "Mac Miller", "Roddy Ricch", "Lil Baby", "Trippie Redd", "Megan Thee Stallion", "Lil Mosey", "French Montana", "Pop Smoke", "Pooh Shiesty", "A Boogie wit Da Hoddie", "Kevin Gates", "King Von", "Rich the Kid", "Rae Sremmurd", "Internet Money", "Young Thug", "Gucci Mane", "88Glam", "Kodak Black", "Lil Yachty", "Chris Brown", "Polo G", "Travis Scott", "Lil Pump", "Fivio Foreign", "Lil Tecca", "Ugly God", "Moneybagg Yo", "Lil Uzi Vert", "Migos", "Jack Harlow", "Ozuna"], "status": "success"}'
+        with TopicManager(HOST, PORT) as tm, Producer(HOST, PORT) as prod, Consumer(HOST, PORT, 100) as cons:
+            tm.create_topic(topic_name)
+            
+            keys_sent = []
+            value = b'{"data": ["Iggy Azalea", "DaBaby", "21 Savage", "Smokepurpp", "Tee Grizzly", "Quando Rondo", "Drake", "NLE Choppa", "Young Dolph", "Lil Nas X", "Nav", "iann dior", "NoCap", "Gunna", "Russ", "Nipsey Hussle", "Don Toliver", "2 Chainz", "Lil Durk", "J Balvin", "YNW Melly", "Tyga", "Juice WRLD", "Mac Miller", "Roddy Ricch", "Lil Baby", "Trippie Redd", "Megan Thee Stallion", "Lil Mosey", "French Montana", "Pop Smoke", "Pooh Shiesty", "A Boogie wit Da Hoddie", "Kevin Gates", "King Von", "Rich the Kid", "Rae Sremmurd", "Internet Money", "Young Thug", "Gucci Mane", "88Glam", "Kodak Black", "Lil Yachty", "Chris Brown", "Polo G", "Travis Scott", "Lil Pump", "Fivio Foreign", "Lil Tecca", "Ugly God", "Moneybagg Yo", "Lil Uzi Vert", "Migos", "Jack Harlow", "Ozuna"], "status": "success"}'
 
-        for x in range(10):
-            key = bytes('key{}'.format(x), 'utf-8')
-            keys_sent.append(key)
-            #values_sent.append(value)
-            # Produce message to our topic
-            produce_request_result = producer.produce(topic_name, key, value)
+            for x in range(10):
+                key = bytes(f'key{x}', 'utf-8')
+                keys_sent.append(key)
+                prod.produce(topic_name, key, value)
 
-        consumer_request_result = consumer.consume(topic_name, "cg1")
+            consumer_request_result = cons.consume(topic_name, "cg1")
 
-        # Check the wraper around consumer request
-        assert consumer_request_result['success'] == True
-        assert consumer_request_result['topicName'] == topic_name
+            assert consumer_request_result['success'] == True
+            assert len(consumer_request_result['messages']) == 10
+            
+            for i in range(len(consumer_request_result['messages'])):
+                message = consumer_request_result['messages'][i]
+                assert keys_sent[i] == bytes(message['key'])
+                assert value == bytes(message['value'])
         
-        assert len(consumer_request_result['messages']) == 10
-        for i in range(len(consumer_request_result['messages'])):
-            message = consumer_request_result['messages'][i]
-            assert keys_sent[i] ==  message['key']
-            assert value ==  message['value']
-    
-        # Delete the topic to clean up
-        topic_delete_result = topic_manager.delete_topic(topic_name)
+            tm.delete_topic(topic_name)
+
+    def test_consumer_poll_generator(self):
+        topic_name = get_random_string(10)
+        
+        with TopicManager(HOST, PORT) as tm, Producer(HOST, PORT) as prod, Consumer(HOST, PORT, 100) as cons:
+            tm.create_topic(topic_name)
+            
+            # Produce exactly 3 messages
+            prod.produce(topic_name, b"key0", b"value0")
+            prod.produce(topic_name, b"key1", b"value1")
+            prod.produce(topic_name, b"key2", b"value2")
+
+            # Create the generator
+            message_generator = cons.poll(topic_name, "cg1")
+            
+            # Pull the first 3 messages from the generator
+            msg0 = next(message_generator)
+            assert bytes(msg0["key"]) == b"key0"
+            
+            msg1 = next(message_generator)
+            assert bytes(msg1["key"]) == b"key1"
+            
+            msg2 = next(message_generator)
+            assert bytes(msg2["key"]) == b"key2"
+            
+            tm.delete_topic(topic_name)

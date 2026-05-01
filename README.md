@@ -24,11 +24,10 @@ LucidMQ is a streaming platform that focuses on providing low configuration and 
 
 ### Repo Structure
 
-The repository is a monorepo with everything LucidMQ related. In the future some of these librarys may be split into their own repository. `LucidMQ`, `LucidMQ-cli` and it's storage system `Nolan` are all written in Rust. `lucidmq-py` and `go-lucidmq` provides client libraries for Python and Go respectively. These clients also have their own integration tests suites to do regression testing and verify correctness.
+The repository is a monorepo with everything LucidMQ related. In the future some of these librarys may be split into their own repository. `LucidMQ` and it's storage system `Nolan` are all written in Rust. `lucidmq-py` provides client libraries for Python and Go respectively. These clients also have their own integration tests suites to do regression testing and verify correctness.
 
     ├── nolan          # The base library containing code for the commitlog
     ├── lucidmq        # Lucidmq broker and server
-    ├── lucidmq-cli    # CLI client for interacting with lucidmq
     ├── lucidmq-py     # Python client library and integration tests
     ├── go-lucidmq     # Go client library and integration tests
     └── protocol       # Cap N' Proto definition protocol used by client-server comunication

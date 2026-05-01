@@ -1,8 +1,0 @@
-// This file is required for development when the whole repo is open. See the following:
-// https://github.com/golang/tools/blob/master/gopls/doc/workspace.md
-// https://go.dev/ref/mod#workspaces
-go 1.20
-
-use ./go-lucidmq
-use ./go-lucidmq/protocol
-use ./go-lucidmq/integration

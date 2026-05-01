@@ -1,52 +1,47 @@
 use std::fmt;
-
-use capnp::message::{TypedReader, Builder, HeapAllocator};
 use tokio::sync::mpsc::{Sender, Receiver};
-use crate::lucid_schema_capnp::{produce_request, topic_request, consume_request};
+use crate::messages::{ProduceRequest, TopicRequest, ConsumeRequest};
 
-pub enum Command{
+pub enum Command {
     TopicRequest {
         conn_id: String,
-        capmessage: TypedReader::<Builder<HeapAllocator>, topic_request::Owned>
-
+        request: TopicRequest,
     },
     ProduceRequest {
         conn_id: String,
-        capmessage: TypedReader::<Builder<HeapAllocator>, produce_request::Owned>
-
+        request: ProduceRequest,
     },
     ConsumeRequest {
         conn_id: String,
-        capmessage: TypedReader::<Builder<HeapAllocator>, consume_request::Owned>
-
+        request: ConsumeRequest,
     },
     Response {
         conn_id: String,
-        capmessagedata: Vec<u8>
+        capmessagedata: Vec<u8>,
     },
     Invalid {
         conn_id: String,
         error_message: String,
-        capmessage_data: Vec<u8>
+        capmessage_data: Vec<u8>,
     }
 }
 
 impl fmt::Debug for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &*self {
-            Command::TopicRequest { conn_id, capmessage: _ } => {
+            Command::TopicRequest { conn_id, request: _ } => {
                 f.debug_struct("Command")
                 .field("Command Type", &"TopicRequest")
                 .field("Connection ID", &conn_id)
                 .finish()
             },
-            Command::ProduceRequest { conn_id, capmessage: _ } => {
+            Command::ProduceRequest { conn_id, request: _ } => {
                 f.debug_struct("Command")
                 .field("Command Type", &"ProduceRequest")
                 .field("Connection ID", &conn_id)
                 .finish()
             },
-            Command::ConsumeRequest { conn_id, capmessage: _ } => {
+            Command::ConsumeRequest { conn_id, request: _ } => {
                 f.debug_struct("Command")
                 .field("Command Type", &"ConsumeRequest")
                 .field("Connection ID", &conn_id)
@@ -66,7 +61,6 @@ impl fmt::Debug for Command {
                 .finish()
             },
         }
-
     }
 }
 

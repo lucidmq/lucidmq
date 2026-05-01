@@ -1,2 +1,2 @@
-pycapnp==1.3.0
+msgpack==1.0.7
 pytest==7.4.1
