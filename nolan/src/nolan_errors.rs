@@ -77,27 +77,53 @@ impl Error for CommitlogError {
     }
 }
 
-//------------Cleaner Error--------------------
+//------------Compactor Error--------------------
 #[derive(Debug, PartialEq)]
-pub struct CleanerError {
+pub struct CompactorError {
     details: String,
 }
 
-impl CleanerError {
-    pub fn new(msg: &str) -> CleanerError {
-        CleanerError {
+impl CompactorError {
+    pub fn new(msg: &str) -> CompactorError {
+        CompactorError {
             details: msg.to_string(),
         }
     }
 }
 
-impl fmt::Display for CleanerError {
+impl fmt::Display for CompactorError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.details)
     }
 }
 
-impl Error for CleanerError {
+impl Error for CompactorError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
+//------------Record Error--------------------
+#[derive(Debug, PartialEq)]
+pub struct RecordError {
+    details: String,
+}
+
+impl RecordError {
+    pub fn new(msg: &str) -> RecordError {
+        RecordError {
+            details: msg.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for RecordError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.details)
+    }
+}
+
+impl Error for RecordError {
     fn description(&self) -> &str {
         &self.details
     }

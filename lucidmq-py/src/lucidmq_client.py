@@ -44,8 +44,53 @@ class LucidmqClient:
 
 
 class Producer(LucidmqClient):
-    def produce(self, topic_name: str, key: bytes, value: bytes) -> dict:
-        msg = msgpack_helper.produce_request(topic_name, key, value)
+    def produce(
+        self,
+        topic_name: str,
+        source_id: bytes,
+        payload = None,
+        parent_source_id: bytes = None,
+        op: str = "Upsert",
+    ) -> dict:
+        msg = msgpack_helper.produce_request(
+            topic_name,
+            source_id,
+            payload,
+            parent_source_id,
+            op,
+        )
+        self.send_message_bytes(msg)
+        data = self.recieve_response()
+        return msgpack_helper.response_parser(data)
+
+    def upsert(
+        self,
+        topic_name: str,
+        source_id: bytes,
+        payload: bytes,
+        parent_source_id: bytes = None,
+    ) -> dict:
+        msg = msgpack_helper.produce_upsert_request(
+            topic_name,
+            source_id,
+            payload,
+            parent_source_id,
+        )
+        self.send_message_bytes(msg)
+        data = self.recieve_response()
+        return msgpack_helper.response_parser(data)
+
+    def delete(
+        self,
+        topic_name: str,
+        source_id: bytes,
+        parent_source_id: bytes = None,
+    ) -> dict:
+        msg = msgpack_helper.produce_delete_request(
+            topic_name,
+            source_id,
+            parent_source_id,
+        )
         self.send_message_bytes(msg)
         data = self.recieve_response()
         return msgpack_helper.response_parser(data)
@@ -76,6 +121,23 @@ class Consumer(LucidmqClient):
             if response.get('success') and response.get('messages'):
                 for message in response['messages']:
                     yield message
+
+
+class StateStore(LucidmqClient):
+    def get(self, topic_name: str, source_id: bytes) -> dict:
+        msg = msgpack_helper.state_request_get(topic_name, source_id)
+        self.send_message_bytes(msg)
+        return msgpack_helper.response_parser(self.recieve_response())
+
+    def get_children(self, topic_name: str, parent_source_id: bytes) -> dict:
+        msg = msgpack_helper.state_request_get_children(topic_name, parent_source_id)
+        self.send_message_bytes(msg)
+        return msgpack_helper.response_parser(self.recieve_response())
+
+    def scan_current(self, topic_name: str) -> dict:
+        msg = msgpack_helper.state_request_scan_current(topic_name)
+        self.send_message_bytes(msg)
+        return msgpack_helper.response_parser(self.recieve_response())
 
 
 class TopicManager(LucidmqClient):
