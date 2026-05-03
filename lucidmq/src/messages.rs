@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+pub use nolan::{RecordOp, StoredRecord};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum MessageEnvelope {
@@ -8,6 +9,8 @@ pub enum MessageEnvelope {
     ProduceResponse(ProduceResponse),
     ConsumeRequest(ConsumeRequest),
     ConsumeResponse(ConsumeResponse),
+    StateRequest(StateRequest),
+    StateResponse(StateResponse),
     InvalidResponse(InvalidResponse),
 }
 
@@ -59,7 +62,7 @@ pub struct TopicsList {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ProduceRequest {
     pub topic_name: String,
-    pub messages: Vec<Message>,
+    pub messages: Vec<StoredRecord>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -82,14 +85,37 @@ pub struct ConsumeRequest {
 pub struct ConsumeResponse {
     pub success: bool,
     pub topic_name: String,
-    pub messages: Vec<Message>,
+    pub messages: Vec<StoredRecord>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Message {
-    pub timestamp: u64,
-    pub key: Vec<u8>,
-    pub value: Vec<u8>,
+// ----- State Store Messages -----
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum StateAction {
+    Get,
+    GetChildren,
+    ScanCurrent,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct StateRequest {
+    pub topic_name: String,
+    pub action: StateAction,
+    #[serde(default)]
+    pub source_id: Option<Vec<u8>>,
+    #[serde(default)]
+    pub parent_source_id: Option<Vec<u8>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct StateResponse {
+    pub success: bool,
+    pub topic_name: String,
+    pub action: StateAction,
+    #[serde(default)]
+    pub record: Option<StoredRecord>,
+    #[serde(default)]
+    pub records: Vec<StoredRecord>,
 }
 
 // ----- Invalid message -----

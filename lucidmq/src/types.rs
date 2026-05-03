@@ -1,6 +1,6 @@
 use std::fmt;
 use tokio::sync::mpsc::{Sender, Receiver};
-use crate::messages::{ProduceRequest, TopicRequest, ConsumeRequest};
+use crate::messages::{ConsumeRequest, ProduceRequest, StateRequest, TopicRequest};
 
 pub enum Command {
     TopicRequest {
@@ -14,6 +14,10 @@ pub enum Command {
     ConsumeRequest {
         conn_id: String,
         request: ConsumeRequest,
+    },
+    StateRequest {
+        conn_id: String,
+        request: StateRequest,
     },
     Response {
         conn_id: String,
@@ -44,6 +48,12 @@ impl fmt::Debug for Command {
             Command::ConsumeRequest { conn_id, request: _ } => {
                 f.debug_struct("Command")
                 .field("Command Type", &"ConsumeRequest")
+                .field("Connection ID", &conn_id)
+                .finish()
+            },
+            Command::StateRequest { conn_id, request: _ } => {
+                f.debug_struct("Command")
+                .field("Command Type", &"StateRequest")
                 .field("Connection ID", &conn_id)
                 .finish()
             },

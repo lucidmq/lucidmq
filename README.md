@@ -20,23 +20,34 @@
 
 ## What is LucidMQ
 
-LucidMQ is a streaming platform that focuses on providing low configuration and low operation overhead along with speed. It enables the creation of stream or queue based applications by providing a rock solid foundation and simple API's. It is made up of multiple modules that are each documented in their own subdirectory.
+LucidMQ is a lightweight messaging and state-store system built around Nolan, the storage engine in this repo. It supports both stream-style reads and compacted "latest value by key" reads.
+
+The compacted API is centered around:
+
+- `upsert(topic, source_id, payload, parent_source_id=None)`
+- `delete(topic, source_id, parent_source_id=None)`
+- `get(topic, source_id)`
+- `get_children(topic, parent_source_id)`
+- `scan_current(topic)`
+
+More detailed behavior and client examples live in the subdirectory READMEs:
+
+- [LucidMQ broker/server docs](lucidmq/README.md)
+- [Python client usage](lucidmq-py/README.md)
 
 ### Repo Structure
 
-The repository is a monorepo with everything LucidMQ related. In the future some of these librarys may be split into their own repository. `LucidMQ` and it's storage system `Nolan` are all written in Rust. `lucidmq-py` provides client libraries for Python and Go respectively. These clients also have their own integration tests suites to do regression testing and verify correctness.
+The repository is a monorepo with the core LucidMQ pieces.
 
-    ├── nolan          # The base library containing code for the commitlog
-    ├── lucidmq        # Lucidmq broker and server
+    ├── nolan          # Storage engine and compaction logic
+    ├── lucidmq        # LucidMQ broker and server
     ├── lucidmq-py     # Python client library and integration tests
-    ├── go-lucidmq     # Go client library and integration tests
-    └── protocol       # Cap N' Proto definition protocol used by client-server comunication
 
 ---
 
 ## Getting Started
 
-Getting started is easy. Just run a server instance of LucidMQ(either from soure or a docker container) and pick a client to interact with your server(CLI and Python Clients avaliable for now).
+Getting started is simple: run a LucidMQ server instance and use a client to write records or query current state.
 
 ### How to Run LucidMQ
 
@@ -44,23 +55,16 @@ Getting started is easy. Just run a server instance of LucidMQ(either from soure
 
 #### Requirements:
 1. Rust and Cargo Installed
-```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
 
 See more details here
 - https://www.rust-lang.org/tools/install
 - https://doc.rust-lang.org/book/ch01-01-installation.html
 
-2. Cap N' Proto Installed
-```bash
-brew install capnp
-```
 - See this info for more installation instructions https://capnproto.org/install.html
 
-See the [README in LucidMQ Directory](/lucidmq/README.md) for starting up the LucidMQ Server.
+See the [README in the LucidMQ directory](lucidmq/README.md) for starting up the LucidMQ server.
 
-For a client to interact with your LucidMQ server instance, utilize the LucidMQ-CLI. Learn more at the [README](/lucidmq-cli/README.md) in that directory.
+For client-side usage examples, see the [Python README](lucidmq-py/README.md).
 
 
 ### Docker
@@ -92,11 +96,6 @@ Pre-requisites:
 Run the python integration tests using the following command:
 ```
 docker-compose -f docker-compose-python-integration.yml up --build --exit-code-from test-runner
-```
-
-Run the golang integration tests using the following command:
-```
-docker-compose -f docker-compose-go-integration.yml up --build --exit-code-from test-runner
 ```
 
 ---

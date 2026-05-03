@@ -1,52 +1,110 @@
 # LucidMQ
 
-This subdirectory contains the library code for LucidMQ. LucidMQ is a library that implements event streaming directly into your application in a brokerless fashion. There is no external processes running, just import LucidMQ and start passing message though to your different applications that are also using LucidMQ.
+This subdirectory contains the LucidMQ broker/server implementation. It persists keyed records into Nolan and exposes both stream-style consume APIs and compacted state-store APIs.
 
-## How to Generate Schema
+## Running the Server
 
-```
-cargo build
-```
-
-## Running the Server Instance
-
-```
+```bash
 cargo run
 ```
 
-Run with logging enabled(valid levels are `debug`, `info`, `warn`,  and `error`)
-```
+Run with logging enabled:
+
+```bash
 RUST_LOG=info cargo run
 ```
 
-> Interested in contributing to LucidMQ? Get familiar with how it works and the terminology.
+## Record Model
 
-## How Does LucidMQ work?
+LucidMQ stores canonical `StoredRecord` values with these fields:
 
-LucidMQ relies on 2 main processes the broker and the server. They comunicate via message passing channels that allow for asyncronous processing. 
+- `source_id`: the primary key for a record
+- `parent_source_id`: an optional grouping key
+- `payload`: the current value for the record
+- `op`: `Upsert` or `Delete`
+- `last_updated`: producer-side timestamp metadata
 
-### Terminology
+`Delete` records are tombstones. They remove a key from the current visible state and are later removed by compaction when it is safe to do so.
 
-#### Broker
+## API Overview
 
-Th broker acts as the main logic behind the LucidMQ service. It is responsible for metadata about topics, producers, consumers and how to persist all of this information.
+### Writes
 
-#### Server
+- `upsert(source_id, parent_source_id, payload)` writes or replaces the latest value for a key
+- `delete(source_id, parent_source_id)` tombstones a key
 
-The server is what allows for incoming connections(via tcp) to establish producers and consumers with outside clients. The protocol format is in capnproto and allows the messages to be easily passed to the broker with zero copy overhead.
+### State Reads
 
-#### Topic
+- `get(source_id)` returns the latest visible record for a key
+- `get_children(parent_source_id)` returns the latest visible children for a parent
+- `scan_current()` returns the current visible snapshot for the whole topic
 
-A topic is an object that maps a commitlog to specific producers and consumers. Basic metadata about producers, consumers and consumer groups are also stored in topics.
+### Stream Reads
 
-#### Producer
+- `consume(consumer_group, timeout)` returns records sequentially for a consumer group
+- stream consumption still exists, but for compacted/stateful workloads the state APIs are the preferred read path
 
-A producer is a representation of a client who submits messages to a single topic.
+## Request Types
 
-#### Consumer
+The broker accepts three main request families:
 
-A consumer is a representation of a client who listens/injests messages from a single topic.
+- `ProduceRequest` for writes
+- `ConsumeRequest` for stream reads
+- `StateRequest` for state-store reads
 
-#### Consumer Group
+`StateRequest` supports these actions:
 
-A consumer group is a construct that allows for multiple consumers to listen to a single topic. Each consumer group has it's own distinct last read offset to allow for different consumer groups to process messages at different points of the offset.
+- `Get`
+- `GetChildren`
+- `ScanCurrent`
+
+`StateResponse` returns:
+
+- `record` for `Get`
+- `records` for `GetChildren` and `ScanCurrent`
+
+Produce responses still return offsets, but they should be treated as internal/remappable implementation details rather than stable external identifiers.
+
+## Example Shapes
+
+Conceptually, the state requests look like:
+
+```text
+StateRequest { topic_name, action: Get, source_id }
+StateRequest { topic_name, action: GetChildren, parent_source_id }
+StateRequest { topic_name, action: ScanCurrent }
+```
+
+Typical write flow:
+
+```text
+upsert("customers", "cust-1", "{\"name\":\"Ada\"}", "org-1")
+upsert("customers", "cust-2", "{\"name\":\"Linus\"}", "org-1")
+delete("customers", "cust-2", "org-1")
+```
+
+## Terminology
+
+### Broker
+
+The broker acts as the main logic behind the LucidMQ service. It is responsible for topics, producers, consumers, and persistence behavior.
+
+### Server
+
+The server accepts incoming TCP connections and forwards parsed requests to the broker.
+
+### Topic
+
+A topic maps Nolan storage to a named stream/state namespace.
+
+### Producer
+
+A producer submits `Upsert` and `Delete` records to a single topic.
+
+### Consumer
+
+A consumer reads records from a single topic in order for a consumer group.
+
+### Consumer Group
+
+A consumer group tracks where sequential stream reads resume for a topic.

@@ -1,7 +1,7 @@
 use crate::lucidmq_errors::{ConsumerError, BrokerError};
 use crate::topic::{Topic, ConsumerGroup};
 use log::{error, info};
-use nolan::CommitlogError;
+use nolan::{CommitlogError, StoredRecord};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -34,7 +34,7 @@ impl Consumer {
     Reads from the commitlog for a set amount of time and returns a vector is messages when complete. 
     The offset where the starting read takes place is based off of the consumer group offset
      */
-    pub fn poll(&mut self, timeout: u64) -> Result<Vec<Vec<u8>>, ConsumerError> {
+    pub fn poll(&mut self, timeout: u64) -> Result<Vec<StoredRecord>, ConsumerError> {
         //Let's check if there are any new segments added.
         self.topic.write().map_err(|e| {
             error!("{}", e);
@@ -44,7 +44,7 @@ impl Consumer {
 
         let timeout_duration = Duration::from_millis(timeout);
         let ten_millis = Duration::from_millis(100);
-        let mut records: Vec<Vec<u8>> = Vec::new();
+        let mut records: Vec<StoredRecord> = Vec::new();
         let start_time = Instant::now();
 
         let mut elapsed_duration = start_time.elapsed();
@@ -58,9 +58,9 @@ impl Consumer {
                 error!("{}", e);
                 ConsumerError::new("Unable to get lock on consumer topic")
             })?;
-            match topic.commitlog.read(n) {
-                Ok(buffer) => {
-                    records.push(buffer);
+            match topic.commitlog.read_record(n) {
+                Ok(record) => {
+                    records.push(record);
                     self.update_consumer_group_offset();
                 }
                 Err(err) => {
@@ -71,7 +71,7 @@ impl Consumer {
                         elapsed_duration = start_time.elapsed();
                     } else {
                         error!("{}", err);
-                        return Err(ConsumerError::new("Error when reading commitlong"));
+                        return Err(ConsumerError::new("Error when reading stored record"));
                     }
                 }
             };
@@ -86,15 +86,15 @@ impl Consumer {
     Given a starting offset and a max_records to return, fetch will read all of the offsets and return the records until there is no more records
     or the max records limit has been hit.
      */
-    pub fn _fetch(&mut self, starting_offset: usize, max_records: usize) -> Vec<Vec<u8>> {
+    pub fn _fetch(&mut self, starting_offset: usize, max_records: usize) -> Vec<StoredRecord> {
         let commitlog = &mut self.topic.write().expect("Unable to get topic from lock").commitlog;
         commitlog.reload_segments();
         let mut offset = starting_offset;
-        let mut records: Vec<Vec<u8>> = Vec::new();
+        let mut records: Vec<StoredRecord> = Vec::new();
         while records.len() < max_records {
-            match commitlog.read(offset) {
-                Ok(buffer) => {
-                    records.push(buffer);
+            match commitlog.read_record(offset) {
+                Ok(record) => {
+                    records.push(record);
                     offset += 1;
                 }
                 Err(err) => {
@@ -173,6 +173,7 @@ mod consumer_tests {
     use crate::lucidmq_errors::BrokerError;
     use crate::topic::{Topic, ConsumerGroup};
     use crate::consumer::Consumer;
+    use nolan::StoredRecord;
     use tempdir::TempDir;
 
     fn dummy_flush() -> Result<(), BrokerError>{Ok(())}
@@ -187,11 +188,16 @@ mod consumer_tests {
         let mut topic = Topic::new(
             "test_topic".to_string(),
             String::from(tmp_dir_string),
-            10,
-            100,
+            256,
+            1024,
         ).unwrap();
-        let bytes = "hello".as_bytes();
-        topic.commitlog.append(bytes).expect("unable to append to commitlog");
+        let record = StoredRecord::upsert(
+            b"source-1".to_vec(),
+            None,
+            b"hello".to_vec(),
+            1000,
+        );
+        topic.commitlog.append_record(record).expect("unable to append to commitlog");
 
         let locked_topic = Arc::new(RwLock::new(topic));
         let cg: Arc<ConsumerGroup> = Arc::new(ConsumerGroup::new("testcg"));
@@ -211,20 +217,26 @@ mod consumer_tests {
         let mut topic = Topic::new(
             "test_topic".to_string(),
             String::from(tmp_dir_string),
-            40,
-            200,
+            256,
+            4096,
         ).unwrap();
-        // TODO: the math here is fuzzy, let's reason about why at 14 iterations of 20 bytes = 280 fits into a topic of 200 size and segment size of 40
-        for _i in 0..15 {
-            let bytes: [u8; 20] = [0; 20];
-            topic.commitlog.append(&bytes).expect("unable to append to commitlog");
+        // Compaction no longer advances the oldest offset by deleting whole leading
+        // segments, so initialization should keep a fresh consumer group at zero.
+        for i in 0..15 {
+            let record = StoredRecord::upsert(
+                format!("source-{}", i).into_bytes(),
+                None,
+                vec![0; 20],
+                i,
+            );
+            topic.commitlog.append_record(record).expect("unable to append to commitlog");
         }
 
         let locked_topic = Arc::new(RwLock::new(topic));
         let cg: Arc<ConsumerGroup> = Arc::new(ConsumerGroup::new("testcg"));
         let mut consumer = Consumer::new(locked_topic, cg, Box::new(move || dummy_flush())).unwrap();
         consumer.consumer_group_initialize().expect("Unable to init cg");
-        assert!(usize::try_from(consumer.consumer_group.offset.load(Ordering::SeqCst)).unwrap() == 2);
+        assert!(usize::try_from(consumer.consumer_group.offset.load(Ordering::SeqCst)).unwrap() == 0);
     }
 
     #[test]
@@ -237,11 +249,16 @@ mod consumer_tests {
         let mut topic = Topic::new(
             "test_topic".to_string(),
             String::from(tmp_dir_string),
-            10,
-            100,
+            256,
+            1024,
         ).unwrap();
-        let bytes = "hello".as_bytes();
-        topic.commitlog.append(bytes).expect("unable to append to commitlog");
+        let record = StoredRecord::upsert(
+            b"source-1".to_vec(),
+            None,
+            b"hello".to_vec(),
+            1000,
+        );
+        topic.commitlog.append_record(record).expect("unable to append to commitlog");
         
         let locked_topic = Arc::new(RwLock::new(topic));
         let cg: Arc<ConsumerGroup> = Arc::new(ConsumerGroup::new("testcg"));
@@ -263,18 +280,23 @@ mod consumer_tests {
         let mut topic = Topic::new(
             "test_topic".to_string(),
             String::from(tmp_dir_string),
-            10,
-            100,
+            256,
+            1024,
         ).unwrap();
-        let bytes = "hello".as_bytes();
-        topic.commitlog.append(bytes).expect("unable to append to commitlog");
+        let record = StoredRecord::upsert(
+            b"source-1".to_vec(),
+            None,
+            b"hello".to_vec(),
+            1000,
+        );
+        topic.commitlog.append_record(record.clone()).expect("unable to append to commitlog");
 
         let locked_topic = Arc::new(RwLock::new(topic));
         let cg: Arc<ConsumerGroup> = Arc::new(ConsumerGroup::new("testcg"));
         let mut consumer = Consumer::new(locked_topic, cg, Box::new(move || dummy_flush())).unwrap();
 
         let msgs = consumer.poll(10).expect("unable to poll");
-        assert!(bytes == &msgs[0]);
+        assert_eq!(vec![record], msgs);
     }
 
     #[test]
@@ -290,11 +312,17 @@ mod consumer_tests {
             1000,
             10000,
         ).unwrap();
-        let mut msg_vec: Vec<Vec<u8>> = Vec::new();
+        let mut msg_vec: Vec<StoredRecord> = Vec::new();
         for i in 0..10 {
             let string_message = format!("hello{}", i);
-            topic.commitlog.append(string_message.as_bytes()).expect("unable to append to commitlog");
-            msg_vec.push(string_message.as_bytes().to_vec());
+            let record = StoredRecord::upsert(
+                format!("source-{}", i).into_bytes(),
+                None,
+                string_message.as_bytes().to_vec(),
+                i,
+            );
+            topic.commitlog.append_record(record.clone()).expect("unable to append to commitlog");
+            msg_vec.push(record);
         }
 
         let locked_topic = Arc::new(RwLock::new(topic));
@@ -302,9 +330,7 @@ mod consumer_tests {
         let mut consumer = Consumer::new(locked_topic, cg, Box::new(move || dummy_flush())).unwrap();
 
         let consumer_msgs = consumer.poll(10).expect("unable to poll");
-        for (i, msg) in msg_vec.iter().enumerate() {
-            assert!(msg == &consumer_msgs[i]);
-        }
+        assert_eq!(msg_vec, consumer_msgs);
     }
 
 }

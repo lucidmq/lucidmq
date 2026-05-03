@@ -1,8 +1,9 @@
 use crate::msgpack_helper::{
-    new_consume_response, new_produce_response, new_topic_response_create,
-    new_topic_response_delete, new_topic_response_describe, new_topic_response_all, new_invalid_response
+    new_consume_response, new_invalid_response, new_produce_response, new_state_response,
+    new_topic_response_all, new_topic_response_create, new_topic_response_delete,
+    new_topic_response_describe,
 };
-use crate::messages::{ConsumeRequest, ProduceRequest, TopicRequest, TopicAction};
+use crate::messages::{ConsumeRequest, ProduceRequest, StateAction, StateRequest, TopicAction, TopicRequest};
 use crate::{
     consumer::Consumer, producer::Producer, topic::Topic, types::Command, types::SenderType,
     types::RecieverType, topic::SimpleTopic
@@ -150,6 +151,29 @@ impl Broker {
                         },
                     }
 
+                }
+                Command::StateRequest {
+                    conn_id,
+                    request,
+                } => {
+                    let result_data = self.handle_state(request).await;
+                    match result_data {
+                        Ok(data) => {
+                            Command::Response {
+                                conn_id,
+                                capmessagedata: data,
+                            }
+                        }
+                        Err(err) => {
+                            let error_string = err.to_string();
+                            let data = self.handle_invalid_message(&error_string).await?;
+                            Command::Invalid {
+                                conn_id,
+                                error_message: error_string,
+                                capmessage_data: data
+                            }
+                        }
+                    }
                 }
                 Command::Invalid { conn_id, error_message,  capmessage_data:_} => {
                     let data = self.handle_invalid_message(&error_message).await?;
@@ -386,6 +410,58 @@ impl Broker {
         }
     }
 
+    async fn handle_state(
+        &mut self,
+        state_request: StateRequest,
+    ) -> Result<Vec<u8>, BrokerError> {
+        info!("Handling state request");
+        let StateRequest {
+            topic_name,
+            action,
+            source_id,
+            parent_source_id,
+        } = state_request;
+
+        let found_index = self.check_topics(&topic_name);
+        match found_index {
+            Some(index) => {
+                let topics = self.topics.read().map_err(|e| {
+                    error!("{}", e);
+                    BrokerError::new("Unable to get read lock on topic")
+                })?;
+                let topic = topics[index].read().map_err(|e| {
+                    error!("{}", e);
+                    BrokerError::new("Unable to get read lock on single topic")
+                })?;
+
+                let (record, records) = match action {
+                    StateAction::Get => {
+                        let requested_source_id = source_id.as_deref().ok_or_else(|| {
+                            BrokerError::new("source_id is required for Get state requests")
+                        })?;
+                        (topic.commitlog.get(requested_source_id), Vec::new())
+                    }
+                    StateAction::GetChildren => {
+                        let requested_parent_source_id = parent_source_id.as_deref().ok_or_else(|| {
+                            BrokerError::new("parent_source_id is required for GetChildren state requests")
+                        })?;
+                        (None, topic.commitlog.get_children(requested_parent_source_id))
+                    }
+                    StateAction::ScanCurrent => (None, topic.commitlog.scan_current()),
+                };
+
+                Ok(new_state_response(&topic_name, true, action, record, records))
+            }
+            None => Ok(new_state_response(
+                &topic_name,
+                false,
+                action,
+                None,
+                Vec::new(),
+            )),
+        }
+    }
+
     async fn handle_producer(
         &mut self,
         produce_request: ProduceRequest,
@@ -403,11 +479,7 @@ impl Broker {
                 
                 let mut last_offset = 0;
                 for msg in produce_request.messages {
-                    let bytes = rmp_serde::to_vec(&msg).map_err(|e| {
-                        error!("{}", e);
-                        BrokerError::new("Unable to serialize message to store in commitlog")
-                    })?;
-                    last_offset = producer.produce_bytes(&bytes).map_err(|e| {
+                    last_offset = producer.produce_record(msg).map_err(|e| {
                         error!("{}", e);
                         BrokerError::new("Unable to produce message to commitlog")
                     })?;

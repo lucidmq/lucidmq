@@ -84,11 +84,10 @@ impl Segment {
             SegmentError::new(&e.to_string())
         })?;
 
-        let mut total_entries = loaded_index.load_index().map_err(|e| {
+        let total_entries = loaded_index.load_index().map_err(|e| {
             error!("{}", e);
             SegmentError::new("unable to load index")
         })?;
-        total_entries += segment_offset;
 
         let segment = Segment {
             file_name: log_file_name,
@@ -106,10 +105,7 @@ impl Segment {
 
     /// Given an offset, find the entry in the index and get the bytes fromt he log
     pub fn read_at(&mut self, offset: usize) -> Result<Vec<u8>, SegmentError> {
-        // This condition is only applied when we're dealing with segment 0, can this be combined below??
-        if (self.starting_offset == 0 && offset >= usize::from(self.next_offset))
-            || (offset >= usize::from(self.next_offset - self.starting_offset))
-        {
+        if offset >= usize::from(self.next_offset) {
             return Err(SegmentError::new("offset is out of bounds"));
         }
         let (start, total) = self
