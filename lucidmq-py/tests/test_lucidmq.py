@@ -115,20 +115,23 @@ class TestProducer:
                 
             topic_manager.delete_topic(topic_name)
 
-    def test_delete_tombstone(self):
+    def test_upsert_replaces_visible_record(self):
         topic_name = get_random_string(10)
         with TopicManager(HOST, PORT) as topic_manager, Producer(HOST, PORT) as producer, StateStore(HOST, PORT) as store:
             topic_manager.create_topic(topic_name)
 
-            producer.upsert(topic_name, b'source-id', b'value', b'parent-a')
-            delete_result = producer.delete(topic_name, b'source-id', b'parent-a')
+            producer.upsert(topic_name, b'source-id', b'value-1', b'parent-a')
+            produce_request_result = producer.upsert(topic_name, b'source-id', b'value-2', b'parent-b')
 
-            assert delete_result['success'] == True
-            assert delete_result['topic_name'] == topic_name
-            assert delete_result['offset'] == 1
+            assert produce_request_result['success'] == True
+            assert produce_request_result['topic_name'] == topic_name
+            assert produce_request_result['offset'] == 1
             scan_result = store.scan_current(topic_name)
             assert scan_result.get('success') == True, scan_result
-            assert scan_result['records'] == []
+            assert len(scan_result['records']) == 1
+            assert bytes(scan_result['records'][0]['source_id']) == b'source-id'
+            assert bytes(scan_result['records'][0]['payload']) == b'value-2'
+            assert bytes(scan_result['records'][0]['parent_source_id']) == b'parent-b'
 
             topic_manager.delete_topic(topic_name)
 
@@ -331,20 +334,23 @@ class TestStateStore:
 
             tm.delete_topic(topic_name)
 
-    def test_scan_current_excludes_deleted_records(self):
+    def test_scan_current_returns_latest_records_by_source(self):
         topic_name = get_random_string(10)
         with TopicManager(HOST, PORT) as tm, Producer(HOST, PORT) as prod, StateStore(HOST, PORT) as store:
             tm.create_topic(topic_name)
 
             prod.upsert(topic_name, b"source-1", b"value-1", b"parent-a")
             prod.upsert(topic_name, b"source-2", b"value-2", b"parent-a")
-            prod.delete(topic_name, b"source-1")
+            prod.upsert(topic_name, b"source-1", b"value-3", b"parent-b")
 
             result = store.scan_current(topic_name)
 
             assert result.get("success") == True, result
             assert result["action"] == "ScanCurrent"
-            assert len(result["records"]) == 1
-            assert bytes(result["records"][0]["source_id"]) == b"source-2"
+            assert len(result["records"]) == 2
+            assert bytes(result["records"][0]["source_id"]) == b"source-1"
+            assert bytes(result["records"][0]["payload"]) == b"value-3"
+            assert bytes(result["records"][0]["parent_source_id"]) == b"parent-b"
+            assert bytes(result["records"][1]["source_id"]) == b"source-2"
 
             tm.delete_topic(topic_name)

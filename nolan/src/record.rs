@@ -12,7 +12,6 @@ pub enum RecordOp {
 /// keyed records.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct StoredRecord {
-    #[serde(alias = "last_updated")]
     pub timestamp: u64,
     pub source_id: Vec<u8>,
     #[serde(default)]

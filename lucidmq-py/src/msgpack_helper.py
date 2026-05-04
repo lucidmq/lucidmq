@@ -17,12 +17,11 @@ def topic_request_all() -> bytes:
     req = {"TopicRequest": {"topic_name": "placeholder", "request_type": "All"}}
     return create_message_frame(msgpack.packb(req, use_bin_type=True))
 
-def _produce_request(
+def produce_request(
     topic_name: str,
     source_id: bytes,
-    payload = None,
+    payload: bytes,
     parent_source_id: bytes = None,
-    op: str = "Upsert"
 ) -> bytes:
     timestamp = time.time_ns() // 1_000_000
     req = {
@@ -33,7 +32,6 @@ def _produce_request(
                 "source_id": source_id,
                 "payload": payload,
                 "parent_source_id": parent_source_id,
-                "op": op,
             }]
         }
     }
@@ -45,14 +43,7 @@ def produce_upsert_request(
     payload: bytes,
     parent_source_id: bytes = None,
 ) -> bytes:
-    return _produce_request(topic_name, source_id, payload, parent_source_id, "Upsert")
-
-def produce_delete_request(
-    topic_name: str,
-    source_id: bytes,
-    parent_source_id: bytes = None,
-) -> bytes:
-    return _produce_request(topic_name, source_id, None, parent_source_id, "Delete")
+    return produce_request(topic_name, source_id, payload, parent_source_id)
 
 def state_request_get(topic_name: str, source_id: bytes) -> bytes:
     req = {

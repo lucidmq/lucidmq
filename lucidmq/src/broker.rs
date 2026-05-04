@@ -479,7 +479,12 @@ impl Broker {
                 
                 let mut last_offset = 0;
                 for msg in produce_request.messages {
-                    last_offset = producer.produce_record(msg).map_err(|e| {
+                    last_offset = producer.produce_record(nolan::StoredRecord::upsert(
+                        msg.source_id,
+                        msg.parent_source_id,
+                        msg.payload,
+                        msg.timestamp,
+                    )).map_err(|e| {
                         error!("{}", e);
                         BrokerError::new("Unable to produce message to commitlog")
                     })?;

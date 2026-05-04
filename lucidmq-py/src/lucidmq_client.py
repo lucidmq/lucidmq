@@ -61,21 +61,6 @@ class Producer(LucidmqClient):
         data = self.recieve_response()
         return msgpack_helper.response_parser(data)
 
-    def delete(
-        self,
-        topic_name: str,
-        source_id: bytes,
-        parent_source_id: bytes = None,
-    ) -> dict:
-        msg = msgpack_helper.produce_delete_request(
-            topic_name,
-            source_id,
-            parent_source_id,
-        )
-        self.send_message_bytes(msg)
-        data = self.recieve_response()
-        return msgpack_helper.response_parser(data)
-
 
 class Consumer(LucidmqClient):
     def __init__(self, host: str, port: int, timeout: int):

@@ -145,22 +145,13 @@ mod msgpack_helper_tests {
     use serde::{Deserialize, Serialize};
 
     use super::{new_consume_response, new_state_response, parse_request};
-    use crate::messages::{MessageEnvelope, StateAction, StateRequest};
+    use crate::messages::{MessageEnvelope, ProduceMessage, ProduceRequest, StateAction, StateRequest};
     use crate::types::Command;
     use nolan::{RecordOp, StoredRecord};
 
     #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     struct CanonicalWireRecord {
         timestamp: u64,
-        source_id: Vec<u8>,
-        payload: Option<Vec<u8>>,
-        parent_source_id: Option<Vec<u8>>,
-        op: RecordOp,
-    }
-
-    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-    struct PreviousCanonicalWireRecord {
-        last_updated: u64,
         source_id: Vec<u8>,
         payload: Option<Vec<u8>>,
         parent_source_id: Option<Vec<u8>>,
@@ -197,40 +188,6 @@ mod msgpack_helper_tests {
                 op: RecordOp::Upsert,
             }
         );
-    }
-
-    #[test]
-    fn test_previous_last_updated_wire_shape_is_accepted() {
-        let previous = PreviousCanonicalWireRecord {
-            last_updated: 1234,
-            source_id: b"source-1".to_vec(),
-            payload: Some(br#"{"hello":"world"}"#.to_vec()),
-            parent_source_id: Some(b"parent-1".to_vec()),
-            op: RecordOp::Upsert,
-        };
-
-        let encoded = rmp_serde::to_vec_named(&previous).expect("unable to encode previous canonical wire record");
-        let decoded: StoredRecord = rmp_serde::from_slice(&encoded).expect("unable to decode previous canonical wire record");
-
-        assert_eq!(1234, decoded.timestamp);
-        assert_eq!(b"source-1".to_vec(), decoded.source_id);
-        assert_eq!(Some(br#"{"hello":"world"}"#.to_vec()), decoded.payload);
-        assert_eq!(Some(b"parent-1".to_vec()), decoded.parent_source_id);
-        assert_eq!(RecordOp::Upsert, decoded.op);
-    }
-
-    #[test]
-    fn test_legacy_wire_shape_is_rejected() {
-        let legacy = LegacyWireRecord {
-            timestamp: 1234,
-            key: b"source-1".to_vec(),
-            value: b"value".to_vec(),
-        };
-
-        let encoded = rmp_serde::to_vec_named(&legacy).expect("unable to encode legacy wire record");
-        let decoded = rmp_serde::from_slice::<StoredRecord>(&encoded);
-
-        assert!(decoded.is_err());
     }
 
     #[test]
@@ -307,6 +264,35 @@ mod msgpack_helper_tests {
                 assert_eq!(StateAction::Get, request.action);
                 assert_eq!(Some(b"source-1".to_vec()), request.source_id);
                 assert_eq!(None, request.parent_source_id);
+            }
+            _ => panic!("unexpected command parsed"),
+        }
+    }
+
+    #[test]
+    fn test_parse_produce_request_append_message() {
+        let request = MessageEnvelope::ProduceRequest(ProduceRequest {
+            topic_name: "topic-a".to_string(),
+            messages: vec![ProduceMessage {
+                timestamp: 1234,
+                source_id: b"source-1".to_vec(),
+                payload: b"value".to_vec(),
+                parent_source_id: Some(b"parent-1".to_vec()),
+            }],
+        });
+
+        let encoded = rmp_serde::to_vec_named(&request).expect("unable to encode produce request");
+        let parsed = parse_request("conn-1".to_string(), encoded);
+
+        match parsed {
+            Command::ProduceRequest { conn_id, request } => {
+                assert_eq!("conn-1", conn_id);
+                assert_eq!("topic-a", request.topic_name);
+                assert_eq!(1, request.messages.len());
+                assert_eq!(1234, request.messages[0].timestamp);
+                assert_eq!(b"source-1".to_vec(), request.messages[0].source_id);
+                assert_eq!(b"value".to_vec(), request.messages[0].payload);
+                assert_eq!(Some(b"parent-1".to_vec()), request.messages[0].parent_source_id);
             }
             _ => panic!("unexpected command parsed"),
         }

@@ -21,17 +21,16 @@ LucidMQ stores canonical `StoredRecord` values with these fields:
 - `source_id`: the primary key for a record
 - `parent_source_id`: an optional grouping key
 - `payload`: the current value for the record
-- `op`: `Upsert` or `Delete`
+- `op`: internal record metadata, usually `Upsert` on client-visible records
 - `timestamp`: producer-side timestamp metadata
 
-`Delete` records are tombstones. They remove a key from the current visible state and are later removed by compaction when it is safe to do so.
+Tombstones are an internal storage detail. Clients append records, and the server/storage layer decides when tombstones are needed and when they can be removed by compaction.
 
 ## API Overview
 
 ### Writes
 
-- `upsert(source_id, parent_source_id, payload)` writes or replaces the latest value for a key
-- `delete(source_id, parent_source_id)` tombstones a key
+- `upsert(source_id, parent_source_id, payload)` appends a record and updates the latest visible value for a key
 
 ### State Reads
 
@@ -80,7 +79,7 @@ Typical write flow:
 ```text
 upsert("customers", "cust-1", "{\"name\":\"Ada\"}", "org-1")
 upsert("customers", "cust-2", "{\"name\":\"Linus\"}", "org-1")
-delete("customers", "cust-2", "org-1")
+upsert("customers", "cust-1", "{\"name\":\"Ada Lovelace\"}", "org-1")
 ```
 
 ## Terminology
@@ -99,7 +98,7 @@ A topic maps Nolan storage to a named stream/state namespace.
 
 ### Producer
 
-A producer submits `Upsert` and `Delete` records to a single topic.
+A producer submits append requests to a single topic. The broker materializes those as upserts in the current state view.
 
 ### Consumer
 

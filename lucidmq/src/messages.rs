@@ -59,10 +59,19 @@ pub struct TopicsList {
 
 // ----- Produce Messages -----
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ProduceMessage {
+    pub timestamp: u64,
+    pub source_id: Vec<u8>,
+    pub payload: Vec<u8>,
+    #[serde(default)]
+    pub parent_source_id: Option<Vec<u8>>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ProduceRequest {
     pub topic_name: String,
-    pub messages: Vec<StoredRecord>,
+    pub messages: Vec<ProduceMessage>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

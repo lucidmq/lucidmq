@@ -9,7 +9,6 @@ It supports both write operations and compacted state-store queries, and it also
 ### Write Helpers
 
 - `Producer.upsert(topic_name, source_id, payload, parent_source_id=None)`
-- `Producer.delete(topic_name, source_id, parent_source_id=None)`
 
 ### State Read Helpers
 
@@ -44,9 +43,6 @@ with TopicManager(HOST, PORT) as topics, Producer(HOST, PORT) as writer, StateSt
     print(customer)
     print(children)
     print(current)
-
-    writer.delete("customers", b"cust-2", b"org-1")
-    print(store.scan_current("customers"))
 
     topics.delete_topic("customers")
 ```

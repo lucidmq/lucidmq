@@ -25,7 +25,6 @@ LucidMQ is a lightweight messaging and state-store system built around Nolan, th
 The compacted API is centered around:
 
 - `upsert(topic, source_id, payload, parent_source_id=None)`
-- `delete(topic, source_id, parent_source_id=None)`
 - `get(topic, source_id)`
 - `get_children(topic, parent_source_id)`
 - `scan_current(topic)`
