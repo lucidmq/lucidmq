@@ -22,7 +22,7 @@ LucidMQ stores canonical `StoredRecord` values with these fields:
 - `parent_source_id`: an optional grouping key
 - `payload`: the current value for the record
 - `op`: `Upsert` or `Delete`
-- `last_updated`: producer-side timestamp metadata
+- `timestamp`: producer-side timestamp metadata
 
 `Delete` records are tombstones. They remove a key from the current visible state and are later removed by compaction when it is safe to do so.
 

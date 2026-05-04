@@ -38,12 +38,12 @@ impl Producer {
         parent_source_id: Option<Vec<u8>>,
         payload: Vec<u8>,
     ) -> Result<u16, ProducerError> {
-        let last_updated = Self::current_time_millis()?;
+        let timestamp = Self::current_time_millis()?;
         self.produce_record(StoredRecord::upsert(
             source_id,
             parent_source_id,
             payload,
-            last_updated,
+            timestamp,
         ))
     }
 
@@ -53,11 +53,11 @@ impl Producer {
         source_id: Vec<u8>,
         parent_source_id: Option<Vec<u8>>,
     ) -> Result<u16, ProducerError> {
-        let last_updated = Self::current_time_millis()?;
+        let timestamp = Self::current_time_millis()?;
         self.produce_record(StoredRecord::delete(
             source_id,
             parent_source_id,
-            last_updated,
+            timestamp,
         ))
     }
 
@@ -157,7 +157,7 @@ mod producer_tests {
         assert_eq!(b"source-1".to_vec(), msg.source_id);
         assert_eq!(Some(b"parent-1".to_vec()), msg.parent_source_id);
         assert_eq!(Some(b"hello".to_vec()), msg.payload);
-        assert!(msg.last_updated > 0);
+        assert!(msg.timestamp > 0);
     }
 
     #[test]
@@ -190,7 +190,7 @@ mod producer_tests {
         assert_eq!(b"source-1".to_vec(), msg.source_id);
         assert_eq!(Some(b"parent-1".to_vec()), msg.parent_source_id);
         assert_eq!(None, msg.payload);
-        assert!(msg.last_updated > 0);
+        assert!(msg.timestamp > 0);
     }
 
     #[test]

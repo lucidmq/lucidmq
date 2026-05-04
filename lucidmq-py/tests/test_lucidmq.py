@@ -132,10 +132,10 @@ class TestProducer:
 
             topic_manager.delete_topic(topic_name)
 
-    def test_produce_topic_dne(self):
+    def test_upsert_topic_dne(self):
         topic_name = get_random_string(10)
         with Producer(HOST, PORT) as producer:
-            produce_request_result = producer.produce(topic_name, b'source-id', b'value')
+            produce_request_result = producer.upsert(topic_name, b'source-id', b'value')
             assert produce_request_result['success'] == False
             assert produce_request_result['topic_name'] == topic_name
             assert produce_request_result['offset'] == 0
@@ -148,7 +148,7 @@ class TestConsumer:
 
             source_id = b'source-id'
             payload = b'value'
-            prod.produce(topic_name, source_id, payload)
+            prod.upsert(topic_name, source_id, payload)
 
             consumer_request_result = cons.consume(topic_name, "cg1")
 
@@ -175,7 +175,7 @@ class TestConsumer:
                 payload = bytes(f'value{x}', 'utf-8')
                 source_ids_sent.append(source_id)
                 payloads_sent.append(payload)
-                prod.produce(topic_name, source_id, payload)
+                prod.upsert(topic_name, source_id, payload)
 
             consumer_request_result = cons.consume(topic_name, "cg1")
 
@@ -218,7 +218,7 @@ class TestConsumer:
 
             source_id = b'source-id'
             payload = b'value'
-            prod.produce(topic_name, source_id, payload)
+            prod.upsert(topic_name, source_id, payload)
 
             consumer_request_result = cons0.consume(topic_name, consumer_group)
 
@@ -248,7 +248,7 @@ class TestConsumer:
             for x in range(10):
                 source_id = bytes(f'source{x}', 'utf-8')
                 source_ids_sent.append(source_id)
-                prod.produce(topic_name, source_id, payload)
+                prod.upsert(topic_name, source_id, payload)
 
             consumer_request_result = cons.consume(topic_name, "cg1")
 
@@ -269,9 +269,9 @@ class TestConsumer:
             tm.create_topic(topic_name)
             
             # Produce exactly 3 messages
-            prod.produce(topic_name, b"source0", b"value0")
-            prod.produce(topic_name, b"source1", b"value1")
-            prod.produce(topic_name, b"source2", b"value2")
+            prod.upsert(topic_name, b"source0", b"value0")
+            prod.upsert(topic_name, b"source1", b"value1")
+            prod.upsert(topic_name, b"source2", b"value2")
 
             # Create the generator
             message_generator = cons.poll(topic_name, "cg1")

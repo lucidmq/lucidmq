@@ -123,13 +123,13 @@ impl Commitlog {
         source_id: Vec<u8>,
         parent_source_id: Option<Vec<u8>>,
         payload: Vec<u8>,
-        last_updated: u64,
+        timestamp: u64,
     ) -> Result<u16, CommitlogError> {
         self.append_record(StoredRecord::upsert(
             source_id,
             parent_source_id,
             payload,
-            last_updated,
+            timestamp,
         ))
     }
 
@@ -138,12 +138,12 @@ impl Commitlog {
         &mut self,
         source_id: Vec<u8>,
         parent_source_id: Option<Vec<u8>>,
-        last_updated: u64,
+        timestamp: u64,
     ) -> Result<u16, CommitlogError> {
         self.append_record(StoredRecord::delete(
             source_id,
             parent_source_id,
-            last_updated,
+            timestamp,
         ))
     }
 

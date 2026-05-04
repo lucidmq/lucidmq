@@ -151,6 +151,15 @@ mod msgpack_helper_tests {
 
     #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     struct CanonicalWireRecord {
+        timestamp: u64,
+        source_id: Vec<u8>,
+        payload: Option<Vec<u8>>,
+        parent_source_id: Option<Vec<u8>>,
+        op: RecordOp,
+    }
+
+    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct PreviousCanonicalWireRecord {
         last_updated: u64,
         source_id: Vec<u8>,
         payload: Option<Vec<u8>>,
@@ -181,13 +190,33 @@ mod msgpack_helper_tests {
         assert_eq!(
             decoded,
             CanonicalWireRecord {
-                last_updated: 1234,
+                timestamp: 1234,
                 source_id: b"source-1".to_vec(),
                 payload: Some(br#"{"hello":"world"}"#.to_vec()),
                 parent_source_id: Some(b"parent-1".to_vec()),
                 op: RecordOp::Upsert,
             }
         );
+    }
+
+    #[test]
+    fn test_previous_last_updated_wire_shape_is_accepted() {
+        let previous = PreviousCanonicalWireRecord {
+            last_updated: 1234,
+            source_id: b"source-1".to_vec(),
+            payload: Some(br#"{"hello":"world"}"#.to_vec()),
+            parent_source_id: Some(b"parent-1".to_vec()),
+            op: RecordOp::Upsert,
+        };
+
+        let encoded = rmp_serde::to_vec_named(&previous).expect("unable to encode previous canonical wire record");
+        let decoded: StoredRecord = rmp_serde::from_slice(&encoded).expect("unable to decode previous canonical wire record");
+
+        assert_eq!(1234, decoded.timestamp);
+        assert_eq!(b"source-1".to_vec(), decoded.source_id);
+        assert_eq!(Some(br#"{"hello":"world"}"#.to_vec()), decoded.payload);
+        assert_eq!(Some(b"parent-1".to_vec()), decoded.parent_source_id);
+        assert_eq!(RecordOp::Upsert, decoded.op);
     }
 
     #[test]

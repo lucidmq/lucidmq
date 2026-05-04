@@ -12,7 +12,8 @@ pub enum RecordOp {
 /// keyed records.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct StoredRecord {
-    pub last_updated: u64,
+    #[serde(alias = "last_updated")]
+    pub timestamp: u64,
     pub source_id: Vec<u8>,
     #[serde(default)]
     pub payload: Option<Vec<u8>>,
@@ -26,10 +27,10 @@ impl StoredRecord {
         source_id: Vec<u8>,
         parent_source_id: Option<Vec<u8>>,
         payload: Vec<u8>,
-        last_updated: u64,
+        timestamp: u64,
     ) -> StoredRecord {
         StoredRecord {
-            last_updated,
+            timestamp,
             source_id,
             payload: Some(payload),
             parent_source_id,
@@ -40,10 +41,10 @@ impl StoredRecord {
     pub fn delete(
         source_id: Vec<u8>,
         parent_source_id: Option<Vec<u8>>,
-        last_updated: u64,
+        timestamp: u64,
     ) -> StoredRecord {
         StoredRecord {
-            last_updated,
+            timestamp,
             source_id,
             payload: None,
             parent_source_id,

@@ -65,7 +65,7 @@ Each record contains:
 - `parent_source_id`
 - `payload`
 - `op`
-- `last_updated`
+- `timestamp`
 
 ## How to Build
 

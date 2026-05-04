@@ -44,25 +44,6 @@ class LucidmqClient:
 
 
 class Producer(LucidmqClient):
-    def produce(
-        self,
-        topic_name: str,
-        source_id: bytes,
-        payload = None,
-        parent_source_id: bytes = None,
-        op: str = "Upsert",
-    ) -> dict:
-        msg = msgpack_helper.produce_request(
-            topic_name,
-            source_id,
-            payload,
-            parent_source_id,
-            op,
-        )
-        self.send_message_bytes(msg)
-        data = self.recieve_response()
-        return msgpack_helper.response_parser(data)
-
     def upsert(
         self,
         topic_name: str,
