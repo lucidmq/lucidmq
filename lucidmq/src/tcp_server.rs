@@ -5,7 +5,7 @@ use std::io;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 
-use crate::msgpack_helper::parse_request;
+use crate::wire::parse_request;
 use crate::types::Command;
 
 use tokio::net::{

@@ -22,6 +22,8 @@
 
 LucidMQ is a lightweight messaging and state-store system built around Nolan, the storage engine in this repo. It supports both stream-style reads and compacted "latest value by key" reads.
 
+LucidMQ's TCP protocol uses a small length-prefixed JSON payload, so requests and responses are easy to inspect while integrating.
+
 The compacted API is centered around:
 
 - `upsert(topic, source_id, payload, parent_source_id=None)`

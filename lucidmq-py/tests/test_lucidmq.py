@@ -4,7 +4,7 @@ import random
 import pytest
 
 from lucidmq_client import Consumer, LucidmqClient, Producer, StateStore, TopicManager
-import msgpack_helper
+import wire
 
 HOST = os.environ.get('LUCIDMQ_SERVER_HOST', '127.0.0.1')
 PORT = int(os.environ.get('LUCIDMQ_SERVER_PORT', '6969'))
@@ -17,11 +17,11 @@ class TestsOthers:
     def test_send_invalid_bytes(self):
         with LucidmqClient(HOST, PORT) as lucidClient:
             invalid_data = b'invalidData'
-            framed = msgpack_helper.create_message_frame(invalid_data)
+            framed = wire.create_message_frame(invalid_data)
             lucidClient.send_message_bytes(framed)
             data = lucidClient.recieve_response()
-            invalid_response_result = msgpack_helper.response_parser(data)
-            assert 'Failed to parse message' in invalid_response_result['error_message']
+            invalid_response_result = wire.response_parser(data)
+            assert 'Failed to parse JSON message' in invalid_response_result['error_message']
 
 class TestTopics:
     def test_topic_create(self):
@@ -129,9 +129,9 @@ class TestProducer:
             scan_result = store.scan_current(topic_name)
             assert scan_result.get('success') == True, scan_result
             assert len(scan_result['records']) == 1
-            assert bytes(scan_result['records'][0]['source_id']) == b'source-id'
-            assert bytes(scan_result['records'][0]['payload']) == b'value-2'
-            assert bytes(scan_result['records'][0]['parent_source_id']) == b'parent-b'
+            assert scan_result['records'][0]['source_id'] == 'source-id'
+            assert scan_result['records'][0]['payload'] == 'value-2'
+            assert scan_result['records'][0]['parent_source_id'] == 'parent-b'
 
             topic_manager.delete_topic(topic_name)
 
@@ -160,8 +160,8 @@ class TestConsumer:
             assert len(consumer_request_result['messages']) == 1
 
             message = consumer_request_result['messages'][0]
-            assert bytes(message['source_id']) == source_id
-            assert bytes(message['payload']) == payload
+            assert message['source_id'] == source_id.decode('utf-8')
+            assert message['payload'] == payload.decode('utf-8')
             
             tm.delete_topic(topic_name)
 
@@ -188,8 +188,8 @@ class TestConsumer:
             
             for i in range(len(consumer_request_result['messages'])):
                 message = consumer_request_result['messages'][i]
-                assert source_ids_sent[i] == bytes(message['source_id'])
-                assert payloads_sent[i] == bytes(message['payload'])
+                assert source_ids_sent[i].decode('utf-8') == message['source_id']
+                assert payloads_sent[i].decode('utf-8') == message['payload']
         
             tm.delete_topic(topic_name)
 
@@ -229,8 +229,8 @@ class TestConsumer:
             assert len(consumer_request_result['messages']) == 1
 
             message = consumer_request_result['messages'][0]
-            assert bytes(message['source_id']) == source_id
-            assert bytes(message['payload']) == payload
+            assert message['source_id'] == source_id.decode('utf-8')
+            assert message['payload'] == payload.decode('utf-8')
 
             # Second consumer polling the same group gets nothing
             consumer_request_result = cons1.consume(topic_name, consumer_group)
@@ -260,8 +260,8 @@ class TestConsumer:
             
             for i in range(len(consumer_request_result['messages'])):
                 message = consumer_request_result['messages'][i]
-                assert source_ids_sent[i] == bytes(message['source_id'])
-                assert payload == bytes(message['payload'])
+                assert source_ids_sent[i].decode('utf-8') == message['source_id']
+                assert payload.decode('utf-8') == message['payload']
         
             tm.delete_topic(topic_name)
 
@@ -281,13 +281,13 @@ class TestConsumer:
             
             # Pull the first 3 messages from the generator
             msg0 = next(message_generator)
-            assert bytes(msg0["source_id"]) == b"source0"
+            assert msg0["source_id"] == "source0"
             
             msg1 = next(message_generator)
-            assert bytes(msg1["source_id"]) == b"source1"
+            assert msg1["source_id"] == "source1"
             
             msg2 = next(message_generator)
-            assert bytes(msg2["source_id"]) == b"source2"
+            assert msg2["source_id"] == "source2"
             
             tm.delete_topic(topic_name)
 
@@ -298,17 +298,17 @@ class TestStateStore:
         with TopicManager(HOST, PORT) as tm, Producer(HOST, PORT) as prod, StateStore(HOST, PORT) as store:
             tm.create_topic(topic_name)
 
-            prod.upsert(topic_name, b"source-1", b'{"version":1}', b"parent-a")
-            prod.upsert(topic_name, b"source-1", b'{"version":2}', b"parent-b")
+            prod.upsert(topic_name, b"source-1", {"version": 1}, b"parent-a")
+            prod.upsert(topic_name, b"source-1", {"version": 2}, b"parent-b")
 
             result = store.get(topic_name, b"source-1")
 
             assert result.get("success") == True, result
             assert result["topic_name"] == topic_name
             assert result["action"] == "Get"
-            assert bytes(result["record"]["source_id"]) == b"source-1"
-            assert bytes(result["record"]["payload"]) == b'{"version":2}'
-            assert bytes(result["record"]["parent_source_id"]) == b"parent-b"
+            assert result["record"]["source_id"] == "source-1"
+            assert result["record"]["payload"] == {"version": 2}
+            assert result["record"]["parent_source_id"] == "parent-b"
 
             tm.delete_topic(topic_name)
 
@@ -326,11 +326,11 @@ class TestStateStore:
 
             assert parent_a.get("success") == True, parent_a
             assert parent_a["action"] == "GetChildren"
-            assert [bytes(record["source_id"]) for record in parent_a["records"]] == [b"source-2"]
+            assert [record["source_id"] for record in parent_a["records"]] == ["source-2"]
 
             assert parent_b.get("success") == True, parent_b
             assert parent_b["action"] == "GetChildren"
-            assert [bytes(record["source_id"]) for record in parent_b["records"]] == [b"source-1"]
+            assert [record["source_id"] for record in parent_b["records"]] == ["source-1"]
 
             tm.delete_topic(topic_name)
 
@@ -348,9 +348,9 @@ class TestStateStore:
             assert result.get("success") == True, result
             assert result["action"] == "ScanCurrent"
             assert len(result["records"]) == 2
-            assert bytes(result["records"][0]["source_id"]) == b"source-1"
-            assert bytes(result["records"][0]["payload"]) == b"value-3"
-            assert bytes(result["records"][0]["parent_source_id"]) == b"parent-b"
-            assert bytes(result["records"][1]["source_id"]) == b"source-2"
+            assert result["records"][0]["source_id"] == "source-1"
+            assert result["records"][0]["payload"] == "value-3"
+            assert result["records"][0]["parent_source_id"] == "parent-b"
+            assert result["records"][1]["source_id"] == "source-2"
 
             tm.delete_topic(topic_name)

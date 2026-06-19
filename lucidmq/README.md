@@ -51,6 +51,8 @@ The broker accepts three main request families:
 - `ConsumeRequest` for stream reads
 - `StateRequest` for state-store reads
 
+Wire requests and responses are JSON payloads prefixed by a 2-byte little-endian frame length. Top-level messages use a `type` field, for example `{"type":"StateRequest", ...}`.
+
 `StateRequest` supports these actions:
 
 - `Get`
@@ -69,17 +71,17 @@ Produce responses still return offsets, but they should be treated as internal/r
 Conceptually, the state requests look like:
 
 ```text
-StateRequest { topic_name, action: Get, source_id }
-StateRequest { topic_name, action: GetChildren, parent_source_id }
-StateRequest { topic_name, action: ScanCurrent }
+{"type":"StateRequest","topic_name":"customers","action":"Get","source_id":"cust-1"}
+{"type":"StateRequest","topic_name":"customers","action":"GetChildren","parent_source_id":"org-1"}
+{"type":"StateRequest","topic_name":"customers","action":"ScanCurrent"}
 ```
 
 Typical write flow:
 
-```text
-upsert("customers", "cust-1", "{\"name\":\"Ada\"}", "org-1")
-upsert("customers", "cust-2", "{\"name\":\"Linus\"}", "org-1")
-upsert("customers", "cust-1", "{\"name\":\"Ada Lovelace\"}", "org-1")
+```json
+{"type":"ProduceRequest","topic_name":"customers","messages":[{"timestamp":1710000000000,"source_id":"cust-1","parent_source_id":"org-1","payload":{"name":"Ada"}}]}
+{"type":"ProduceRequest","topic_name":"customers","messages":[{"timestamp":1710000000001,"source_id":"cust-2","parent_source_id":"org-1","payload":{"name":"Linus"}}]}
+{"type":"ProduceRequest","topic_name":"customers","messages":[{"timestamp":1710000000002,"source_id":"cust-1","parent_source_id":"org-1","payload":{"name":"Ada Lovelace"}}]}
 ```
 
 ## Terminology

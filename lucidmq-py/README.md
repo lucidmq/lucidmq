@@ -33,11 +33,11 @@ PORT = 6969
 with TopicManager(HOST, PORT) as topics, Producer(HOST, PORT) as writer, StateStore(HOST, PORT) as store:
     topics.create_topic("customers")
 
-    writer.upsert("customers", b"cust-1", b'{"name":"Ada"}', b"org-1")
-    writer.upsert("customers", b"cust-2", b'{"name":"Linus"}', b"org-1")
+    writer.upsert("customers", "cust-1", {"name": "Ada"}, "org-1")
+    writer.upsert("customers", "cust-2", {"name": "Linus"}, "org-1")
 
-    customer = store.get("customers", b"cust-1")
-    children = store.get_children("customers", b"org-1")
+    customer = store.get("customers", "cust-1")
+    children = store.get_children("customers", "org-1")
     current = store.scan_current("customers")
 
     print(customer)
@@ -49,7 +49,7 @@ with TopicManager(HOST, PORT) as topics, Producer(HOST, PORT) as writer, StateSt
 
 ## Response Shape
 
-State reads return dictionaries parsed from MessagePack:
+State reads return dictionaries parsed from JSON:
 
 - `get(...)` returns a response with `record`
 - `get_children(...)` returns a response with `records`

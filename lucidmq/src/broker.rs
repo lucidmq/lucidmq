@@ -1,4 +1,4 @@
-use crate::msgpack_helper::{
+use crate::wire::{
     new_consume_response, new_invalid_response, new_produce_response, new_state_response,
     new_topic_response_all, new_topic_response_create, new_topic_response_delete,
     new_topic_response_describe,

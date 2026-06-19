@@ -1,12 +1,12 @@
 mod broker;
 mod consumer;
 pub mod messages;
-mod msgpack_helper;
 mod producer;
 mod lucidmq_errors;
 mod tcp_server;
 mod topic;
 mod types;
+mod wire;
 
 use std::env;
 

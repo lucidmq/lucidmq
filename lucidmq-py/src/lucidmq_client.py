@@ -1,5 +1,9 @@
 import socket
-import msgpack_helper
+from typing import Any, Optional, Union
+
+import wire
+
+TextLike = Union[str, bytes, bytearray]
 
 class LucidmqClient:
     def __init__(self, host: str, port: int):
@@ -47,11 +51,11 @@ class Producer(LucidmqClient):
     def upsert(
         self,
         topic_name: str,
-        source_id: bytes,
-        payload: bytes,
-        parent_source_id: bytes = None,
+        source_id: TextLike,
+        payload: Any,
+        parent_source_id: Optional[TextLike] = None,
     ) -> dict:
-        msg = msgpack_helper.produce_upsert_request(
+        msg = wire.produce_upsert_request(
             topic_name,
             source_id,
             payload,
@@ -59,7 +63,7 @@ class Producer(LucidmqClient):
         )
         self.send_message_bytes(msg)
         data = self.recieve_response()
-        return msgpack_helper.response_parser(data)
+        return wire.response_parser(data)
 
 
 class Consumer(LucidmqClient):
@@ -69,10 +73,10 @@ class Consumer(LucidmqClient):
 
     def consume(self, topic_name: str, consumer_group: str) -> dict:
         """Fetches a single batch of messages (raw response)"""
-        msg = msgpack_helper.consume_request(topic_name, consumer_group, self.timeout)
+        msg = wire.consume_request(topic_name, consumer_group, self.timeout)
         self.send_message_bytes(msg)
         data = self.recieve_response()
-        return msgpack_helper.response_parser(data)
+        return wire.response_parser(data)
 
     # 3. Leveraging Generators (yield)
     def poll(self, topic_name: str, consumer_group: str):
@@ -90,39 +94,39 @@ class Consumer(LucidmqClient):
 
 
 class StateStore(LucidmqClient):
-    def get(self, topic_name: str, source_id: bytes) -> dict:
-        msg = msgpack_helper.state_request_get(topic_name, source_id)
+    def get(self, topic_name: str, source_id: TextLike) -> dict:
+        msg = wire.state_request_get(topic_name, source_id)
         self.send_message_bytes(msg)
-        return msgpack_helper.response_parser(self.recieve_response())
+        return wire.response_parser(self.recieve_response())
 
-    def get_children(self, topic_name: str, parent_source_id: bytes) -> dict:
-        msg = msgpack_helper.state_request_get_children(topic_name, parent_source_id)
+    def get_children(self, topic_name: str, parent_source_id: TextLike) -> dict:
+        msg = wire.state_request_get_children(topic_name, parent_source_id)
         self.send_message_bytes(msg)
-        return msgpack_helper.response_parser(self.recieve_response())
+        return wire.response_parser(self.recieve_response())
 
     def scan_current(self, topic_name: str) -> dict:
-        msg = msgpack_helper.state_request_scan_current(topic_name)
+        msg = wire.state_request_scan_current(topic_name)
         self.send_message_bytes(msg)
-        return msgpack_helper.response_parser(self.recieve_response())
+        return wire.response_parser(self.recieve_response())
 
 
 class TopicManager(LucidmqClient):
     def create_topic(self, topic_name: str) -> dict:
-        msg = msgpack_helper.topic_request_create(topic_name)
+        msg = wire.topic_request_create(topic_name)
         self.send_message_bytes(msg)
-        return msgpack_helper.response_parser(self.recieve_response())
+        return wire.response_parser(self.recieve_response())
     
     def describe_topic(self, topic_name: str) -> dict:
-        msg = msgpack_helper.topic_request_describe(topic_name)
+        msg = wire.topic_request_describe(topic_name)
         self.send_message_bytes(msg)
-        return msgpack_helper.response_parser(self.recieve_response())
+        return wire.response_parser(self.recieve_response())
 
     def delete_topic(self, topic_name: str) -> dict:
-        msg = msgpack_helper.topic_request_delete(topic_name)
+        msg = wire.topic_request_delete(topic_name)
         self.send_message_bytes(msg)
-        return msgpack_helper.response_parser(self.recieve_response())
+        return wire.response_parser(self.recieve_response())
     
     def all_topic(self) -> dict:
-        msg = msgpack_helper.topic_request_all()
+        msg = wire.topic_request_all()
         self.send_message_bytes(msg)
-        return msgpack_helper.response_parser(self.recieve_response())
+        return wire.response_parser(self.recieve_response())
